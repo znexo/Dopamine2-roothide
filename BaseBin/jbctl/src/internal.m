@@ -1,6 +1,6 @@
 #import "internal.h"
-#import "dyldpatch.h"
 #import "codesign.h"
+#import "dyldpatch.h"
 #import <libjailbreak/carboncopy.h>
 #import <Foundation/Foundation.h>
 #import <libjailbreak/libjailbreak.h>
@@ -73,9 +73,10 @@ int jbctl_handle_internal(const char *command, int argc, char* argv[])
 		carbonCopy(NSJBRootPath(@"/basebin/systemhook.dylib"), NSJBRootPath(@"/basebin/.fakelib/systemhook.dylib"));
 
 		// Replace dyld in fakelib with patched dyld
-		NSString *fakelibDyldPath = [fakelibPath stringByAppendingPathComponent:@"dyld"];
-		[[NSFileManager defaultManager] removeItemAtPath:fakelibDyldPath error:nil];
-		carbonCopy(dyldPatchPath, NSJBRootPath(@"/basebin/.fakelib/dyld"));
+		// NSString *fakelibDyldPath = [fakelibPath stringByAppendingPathComponent:@"dyld"];
+		// [[NSFileManager defaultManager] removeItemAtPath:fakelibDyldPath error:nil];
+		// carbonCopy(dyldPatchPath, NSJBRootPath(@"/basebin/.fakelib/dyld"));
+
 		return 0;
 	}
 	else if (!strcmp(command, "fakelib_mount")) {
@@ -101,6 +102,10 @@ int jbctl_handle_internal(const char *command, int argc, char* argv[])
 			CFUserNotificationDisplayAlert(0, 2/*kCFUserNotificationCautionAlertLevel*/, NULL, NULL, NULL, CFSTR("Watchdog Timeout"), (__bridge CFStringRef)printMessage, NULL, NULL, NULL, NULL);
 			free(panicMessage);
 		}
+
+		//only bootstrap after launchdhook and systemhook available
+		exec_cmd(JBRootPath("/usr/bin/launchctl"), "bootstrap", "system", "/Library/LaunchDaemons", NULL);
+
 		exec_cmd(JBRootPath("/usr/bin/uicache"), "-a", NULL);
 	}
 	else if (!strcmp(command, "install_pkg")) {

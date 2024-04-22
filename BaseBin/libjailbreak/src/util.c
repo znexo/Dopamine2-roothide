@@ -3,6 +3,8 @@
 #include "info.h"
 #include "kernel.h"
 #include "translation.h"
+#include "libproc.h"
+#include "libproc_private.h"
 #include <spawn.h>
 #include <mach/mach_time.h>
 #include <pthread.h>
@@ -34,7 +36,6 @@ uint64_t proc_self(void)
 	static uint64_t gSelfProc = 0;
 	static dispatch_once_t onceToken;
 	dispatch_once(&onceToken, ^{
-		bool needsRelease = false;
 		gSelfProc = proc_find(getpid());
 		// decrement ref count again, we assume proc_self will exist for the whole lifetime of this process
 		proc_rele(gSelfProc);
@@ -70,6 +71,34 @@ uint64_t pmap_self(void)
 		gSelfPmap = kread_ptr(vm_map_self() + koffsetof(vm_map, pmap));
 	});
 	return gSelfPmap;
+}
+
+pid_t proc_get_ppid(pid_t pid)
+{
+    struct proc_bsdinfo procInfo;
+    if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &procInfo, sizeof(procInfo)) <= 0) {
+        return -1;
+    }
+    return procInfo.pbi_ppid;
+}
+
+int proc_paused(pid_t pid, bool* paused)
+{
+    *paused = false;
+
+    struct proc_bsdinfo procInfo = {0};
+    int ret = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &procInfo, sizeof(procInfo));
+    if (ret != sizeof(procInfo)) {
+        return -1;
+    }
+
+    if (procInfo.pbi_status == SSTOP) {
+        *paused = true;
+    } else if (procInfo.pbi_status != SRUN) {
+        return -1;
+    }
+
+    return 0;
 }
 
 uint64_t task_get_ipc_port_table_entry(uint64_t task, mach_port_t port)
@@ -285,9 +314,9 @@ uint64_t kpacda(uint64_t pointer, uint64_t modifier)
 {
 	if (gPrimitives.kexec && kgadget(pacda)) {
 		// |------- GADGET -------|
-		// | cmp x1, #0		      |
+		// | cmp x1, #0		      |
 		// | pacda x1, x9         |
-		// | str x9, [x8]         |
+		// | str x9, [x8]         |
 		// | csel x9, xzr, x1, eq |
 		// | ret                  |
 		// |----------------------|
@@ -372,9 +401,9 @@ int __exec_cmd_internal_va(bool suspended, bool root, pid_t *pidOut, const char 
 
 	posix_spawnattr_t attr = NULL;
 	posix_spawnattr_init(&attr);
-	if (suspended) {
+	// if (suspended) {
 		posix_spawnattr_setflags(&attr, POSIX_SPAWN_START_SUSPENDED);
-	}
+	// }
 	if (root) {
 		posix_spawnattr_set_persona_np(&attr, 99, POSIX_SPAWN_PERSONA_FLAGS_OVERRIDE);
 		posix_spawnattr_set_persona_uid_np(&attr, 0);
@@ -386,7 +415,10 @@ int __exec_cmd_internal_va(bool suspended, bool root, pid_t *pidOut, const char 
 	if (attr) posix_spawnattr_destroy(&attr);
 	if (spawnError != 0) return spawnError;
 
+	jbclient_patch_spawn(spawnedPid, false);
+
 	if (!suspended) {
+		kill(spawnedPid, SIGCONT);
 		return cmd_wait_for_exit(spawnedPid);
 	}
 	else if (pidOut) {

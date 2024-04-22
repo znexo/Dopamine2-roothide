@@ -10,6 +10,10 @@
 #include <libjailbreak/util.h>
 #include <libjailbreak/primitives.h>
 #include <libjailbreak/codesign.h>
+#include <signal.h>
+
+#include "exec_patch.h"
+#include "libjailbreak/log.h"
 
 extern bool stringEndsWith(const char* str, const char* suffix);
 
@@ -72,6 +76,34 @@ static int systemwide_trust_library(audit_token_t *processToken, const char *lib
 	return trust_file(libraryPath, callerLibraryPath, callerPath);
 }
 
+char* generate_sandbox_extensions(audit_token_t *processToken, bool writable)
+{
+	char* sandboxExtensionsOut=NULL;
+	char jbrootbase[PATH_MAX];
+	char jbrootsecondary[PATH_MAX];
+	snprintf(jbrootbase, sizeof(jbrootbase), "/private/var/containers/Bundle/Application/.jbroot-%016llX/", jbinfo(jbrand));
+	snprintf(jbrootsecondary, sizeof(jbrootsecondary), "/private/var/mobile/Containers/Shared/AppGroup/.jbroot-%016llX/", jbinfo(jbrand));
+
+	char* fileclass = writable ? "com.apple.app-sandbox.read-write" : "com.apple.app-sandbox.read";
+
+	char *readExtension = sandbox_extension_issue_file_to_process("com.apple.app-sandbox.read", jbrootbase, 0, *processToken);
+	char *execExtension = sandbox_extension_issue_file_to_process("com.apple.sandbox.executable", jbrootbase, 0, *processToken);
+	char *readExtension2 = sandbox_extension_issue_file_to_process(fileclass, jbrootsecondary, 0, *processToken);
+	if (readExtension && execExtension && readExtension2) {
+		char extensionBuf[strlen(readExtension) + 1 + strlen(execExtension) + strlen(readExtension2) + 1];
+		strcat(extensionBuf, readExtension);
+		strcat(extensionBuf, "|");
+		strcat(extensionBuf, execExtension);
+		strcat(extensionBuf, "|");
+		strcat(extensionBuf, readExtension2);
+		sandboxExtensionsOut = strdup(extensionBuf);
+	}
+	if (readExtension) free(readExtension);
+	if (execExtension) free(execExtension);
+	if (readExtension2) free(readExtension2);
+	return sandboxExtensionsOut;
+}
+
 static int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, char **bootUUIDOut, char **sandboxExtensionsOut)
 {
 	// Fetch process info
@@ -86,18 +118,12 @@ static int systemwide_process_checkin(audit_token_t *processToken, char **rootPa
 	systemwide_get_jbroot(rootPathOut);
 	systemwide_get_boot_uuid(bootUUIDOut);
 
+
+	struct statfs fs;
+	bool isPlatformProcess = statfs(procPath, &fs)==0 && strcmp(fs.f_mntonname, "/private/var") != 0;
+
 	// Generate sandbox extensions for the requesting process
-	char *readExtension = sandbox_extension_issue_file_to_process("com.apple.app-sandbox.read", JBRootPath(""), 0, *processToken);
-	char *execExtension = sandbox_extension_issue_file_to_process("com.apple.sandbox.executable", JBRootPath(""), 0, *processToken);
-	if (readExtension && execExtension) {
-		char extensionBuf[strlen(readExtension) + 1 + strlen(execExtension) + 1];
-		strcat(extensionBuf, readExtension);
-		strcat(extensionBuf, "|");
-		strcat(extensionBuf, execExtension);
-		*sandboxExtensionsOut = strdup(extensionBuf);
-	}
-	if (readExtension) free(readExtension);
-	if (execExtension) free(execExtension);
+	*sandboxExtensionsOut = generate_sandbox_extensions(processToken, isPlatformProcess);
 
 	// Allow invalid pages
 	cs_allow_invalid(proc, false);
@@ -245,6 +271,58 @@ static int systemwide_cs_revalidate(audit_token_t *callerToken)
 	return -1;
 }
 
+static int systemwide_cs_drop_get_task_allow(audit_token_t *callerToken)
+{
+    uint64_t callerPid = audit_token_to_pid(*callerToken);
+    if (callerPid > 0) {
+        uint64_t callerProc = proc_find(callerPid);
+        if (callerProc) {
+            proc_csflags_clear(callerProc, CS_GET_TASK_ALLOW);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static int systemwide_patch_spawn(audit_token_t *callerToken, int pid, bool resume)
+{
+    uint64_t callerPid = audit_token_to_pid(*callerToken);
+    if (callerPid > 0) {
+        pid_t ppid = proc_get_ppid(pid);
+        if (callerPid == ppid) {
+            JBLogDebug("spawn patch: %d -> %d:%d resume=%d", callerPid, pid, ppid, resume);
+            if (proc_csflags_patch(pid) == 0){
+                if(resume)
+                    kill(pid, SIGCONT);
+                return 0;
+            }
+        }else{
+            JBLogError("spawn patch denied: %d -> %d:%d", callerPid, pid, ppid);
+        }
+    }
+    return -1;
+}
+
+static int systemwide_patch_exec_add(audit_token_t *callerToken, const char* exec_path, bool resume)
+{
+    uint64_t callerPid = audit_token_to_pid(*callerToken);
+    if (callerPid > 0) {
+        patchExecAdd((int)callerPid, exec_path, resume);
+        return 0;
+    }
+    return -1;
+}
+
+static int systemwide_patch_exec_del(audit_token_t *callerToken, const char* exec_path)
+{
+    uint64_t callerPid = audit_token_to_pid(*callerToken);
+    if (callerPid > 0){
+        patchExecDel((int)callerPid, exec_path);
+        return 0;
+    }
+    return -1;
+}
+
 struct jbserver_domain gSystemwideDomain = {
 	.permissionHandler = systemwide_domain_allowed,
 	.actions = {
@@ -310,6 +388,47 @@ struct jbserver_domain gSystemwideDomain = {
 				{ 0 },
 			},
 		},
+        // JBS_SYSTEMWIDE_CS_DROP_GET_TASK_ALLOW
+        {
+            // .action = JBS_SYSTEMWIDE_CS_DROP_GET_TASK_ALLOW,
+            .handler = systemwide_cs_drop_get_task_allow,
+            .args = (jbserver_arg[]) {
+                    { .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
+                    { 0 },
+            },
+        },
+        // JBS_SYSTEMWIDE_PATCH_SPAWN
+        {
+            // .action = JBS_SYSTEMWIDE_PATCH_SPAWN,
+            .handler = systemwide_patch_spawn,
+            .args = (jbserver_arg[]) {
+                    { .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
+                    { .name = "pid", .type = JBS_TYPE_UINT64, .out = false },
+                    { .name = "resume", .type = JBS_TYPE_BOOL, .out = false },
+                    { 0 },
+            },
+        },
+        // JBS_SYSTEMWIDE_PATCH_EXEC_ADD
+        {
+            // .action = JBS_SYSTEMWIDE_PATCH_EXEC_ADD,
+            .handler = systemwide_patch_exec_add,
+            .args = (jbserver_arg[]) {
+                    { .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
+                    { .name = "exec-path", .type = JBS_TYPE_STRING, .out = false },
+                    { .name = "resume", .type = JBS_TYPE_BOOL, .out = false },
+                    { 0 },
+            },
+        },
+        // JBS_SYSTEMWIDE_PATCH_EXEC_DEL
+        {
+            // .action = JBS_SYSTEMWIDE_PATCH_EXEC_DEL,
+            .handler = systemwide_patch_exec_del,
+            .args = (jbserver_arg[]) {
+                    { .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
+                    { .name = "exec-path", .type = JBS_TYPE_STRING, .out = false },
+                    { 0 },
+            },
+        },
 		{ 0 },
 	},
 };

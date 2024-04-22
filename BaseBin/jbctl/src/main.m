@@ -14,7 +14,8 @@ void print_usage(void)
 Available commands:\n\
 	proc_set_debugged <pid>\t\tMarks the process with the given pid as being debugged, allowing invalid code pages inside of it\n\
 	rebuild_trustcache\t\tRebuilds the TrustCache, clearing any previously trustcached files that no longer exists from it (automatically ran daily at midnight)\n\
-	update <tipa/basebin> <path>\tInitiates a jailbreak update either based on a TIPA or based on a basebin.tar file, TIPA installation depends on TrollStore, afterwards it triggers a userspace reboot\n");
+	update <tipa/basebin> <path>\tInitiates a jailbreak update either based on a TIPA or based on a basebin.tar file, TIPA installation depends on TrollStore, afterwards it triggers a userspace reboot\n\
+    unsandbox <dirpath> <filepath>\t\t\t\tUnsandbox the file to the dir by fake kernel namecache.\n");
 }
 
 int main(int argc, char* argv[])
@@ -51,6 +52,28 @@ int main(int argc, char* argv[])
 			printf("Failed to mark proc of pid %d as debugged\n", pid);
 		}
 	}
+    else if (!strcmp(cmd, "unsandbox")) {
+        if (argc != 4) {
+            print_usage();
+            return 1;
+        }
+        int dirfd = open(argv[2], O_RDONLY);
+        if (dirfd < 0) {
+            printf("open dir failed %d,%s", errno, strerror(errno));
+            return 1;
+        }
+
+        int filefd = open(argv[3], O_RDONLY);
+        if (filefd < 0) {
+            printf("open file failed %d,%s", errno, strerror(errno));
+            return 1;
+        }
+
+        close(dirfd);
+        close(filefd);
+
+        printf("result: %d\n", jbclient_platform_unsandbox(argv[2], argv[3], fileno(stdout)));
+    }
 	else if (!strcmp(cmd, "rebuild_trustcache")) {
 		//jbdRebuildTrustCache();
 	} else if (!strcmp(cmd, "reboot_userspace")) {

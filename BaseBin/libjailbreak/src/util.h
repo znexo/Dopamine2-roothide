@@ -13,12 +13,21 @@
 #define L2_BLOCK_PAGECOUNT (L2_BLOCK_SIZE / PAGE_SIZE)
 #define L2_BLOCK_MASK (L2_BLOCK_SIZE-1)
 
+/* Status values. */
+#define SIDL    1               /* Process being created by fork. */
+#define SRUN    2               /* Currently runnable. */
+#define SSLEEP  3               /* Sleeping on an address. */
+#define SSTOP   4               /* Process debugging or suspension. */
+#define SZOMB   5               /* Awaiting collection by parent. */
+
 void proc_iterate(void (^itBlock)(uint64_t, bool*));
 
 uint64_t proc_self(void);
 uint64_t task_self(void);
 uint64_t vm_map_self(void);
 uint64_t pmap_self(void);
+pid_t proc_get_ppid(pid_t pid);
+int proc_paused(pid_t pid, bool* paused);
 
 uint64_t task_get_ipc_port_table_entry(uint64_t task, mach_port_t port);
 uint64_t task_get_ipc_port_object(uint64_t task, mach_port_t port);

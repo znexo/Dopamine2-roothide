@@ -2,6 +2,7 @@
 #define JBCLIENT_XPC_H
 
 #include <xpc/xpc.h>
+#include <xpc_private.h>
 #include <stdint.h>
 
 void jbclient_xpc_set_custom_port(mach_port_t serverPort);
@@ -16,8 +17,13 @@ int jbclient_trust_library(const char *libraryPath, void *addressInCaller);
 int jbclient_process_checkin(char **rootPathOut, char **bootUUIDOut, char **sandboxExtensionsOut);
 int jbclient_fork_fix(uint64_t childPid);
 int jbclient_cs_revalidate(void);
+int jbclient_cs_drop_get_task_allow(void);
+int jbclient_patch_spawn(int pid, bool resume);
+int jbclient_patch_exec_add(const char* exec_path, bool resume);
+int jbclient_patch_exec_del(const char* exec_path);
 int jbclient_platform_set_process_debugged(uint64_t pid, bool fullyDebugged);
 int jbclient_platform_stage_jailbreak_update(const char *updateTar);
+int jbclient_platform_unsandbox(const char *dir, const char *file, int log_fd);
 int jbclient_watchdog_intercept_userspace_panic(const char *panicMessage);
 int jbclient_watchdog_get_last_userspace_panic(char **panicMessage);
 int jbclient_root_get_physrw(bool singlePTE);

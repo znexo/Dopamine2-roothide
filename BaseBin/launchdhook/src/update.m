@@ -3,6 +3,7 @@
 #include <libjailbreak/trustcache.h>
 #include <xpc/xpc.h>
 #include <dlfcn.h>
+#include <sys/mount.h>
 
 #import <Foundation/Foundation.h>
 
@@ -56,8 +57,9 @@ int jbupdate_basebin(const char *basebinTarPath)
 		[[NSFileManager defaultManager] removeItemAtPath:tmpExtractionPath error:nil];
 
 		// Update systemhook in fakelib
-		[[NSFileManager defaultManager] removeItemAtPath:NSJBRootPath(@"/basebin/.fakelib/systemhook.dylib") error:nil];
-		[[NSFileManager defaultManager] copyItemAtPath:NSJBRootPath(@"/basebin/systemhook.dylib") toPath:NSJBRootPath(@"/basebin/.fakelib/systemhook.dylib") error:nil];
+		NSString* systemhookFilePath = [NSString stringWithFormat:@"%@/systemhook-%016llX.dylib", NSJBRootPath(@"/basebin"), jbinfo(jbrand)];
+		[[NSFileManager defaultManager] removeItemAtPath:systemhookFilePath error:nil];
+		[[NSFileManager defaultManager] copyItemAtPath:NSJBRootPath(@"/basebin/systemhook.dylib") toPath:systemhookFilePath error:nil];
 
 		// Patch basebin plists
 		NSURL *basebinDaemonsURL = [NSURL fileURLWithPath:NSJBRootPath(@"/basebin/LaunchDaemons")];
@@ -106,8 +108,11 @@ void jbupdate_update_system_info(void)
 		void (*xpf_stop)(void) = dlsym(xpfHandle, "xpf_stop");
 		xpc_object_t (*xpf_construct_offset_dictionary)(const char *sets[]) = dlsym(xpfHandle, "xpf_construct_offset_dictionary");
 
-		// XXX: this is a hack
-		const char *kernelPath = JBRootPath("/../../System/Library/Caches/com.apple.kernelcaches/kernelcache");
+		// XXX: this is also a hack
+		struct statfs fst={0};
+		statfs("/usr/standalone/firmware", &fst);
+		char kernelPath[PATH_MAX];
+		snprintf(kernelPath,sizeof(kernelPath),"%s/../../../System/Library/Caches/com.apple.kernelcaches/kernelcache", fst.f_mntfromname);
 		xpc_object_t systemInfoXdict = NULL;
 
 		// Rerun patchfinder
@@ -122,12 +127,13 @@ void jbupdate_update_system_info(void)
 				"struct",
 				"physrw",
 				"perfkrw",
+                "namecache",
 				NULL,
 				NULL,
 				NULL,
 			};
 
-			uint32_t idx = 7;
+			uint32_t idx = 8;
 			if (xpf_set_is_supported("devmode")) {
 				sets[idx++] = "devmode"; 
 			}
@@ -165,6 +171,7 @@ void jbupdate_update_system_info(void)
 		xpc_dictionary_set_uint64(systemInfoXdict, "kernelConstant.cpuTTEP", kconstant(cpuTTEP));
 		xpc_dictionary_set_uint64(systemInfoXdict, "jailbreakInfo.usesPACBypass", jbinfo(usesPACBypass));
 		xpc_dictionary_set_string(systemInfoXdict, "jailbreakInfo.rootPath", jbinfo(rootPath));
+		xpc_dictionary_set_uint64(systemInfoXdict, "jailbreakInfo.jbrand", jbinfo(jbrand));
 
 		// Rebuild gSystemInfo
 		jbinfo_initialize_dynamic_offsets(systemInfoXdict);

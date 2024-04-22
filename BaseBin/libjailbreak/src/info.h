@@ -25,11 +25,14 @@ struct system_info {
 		uint64_t PT_INDEX_MAX;
 		uint64_t nsysent;
 		uint64_t mach_trap_count;
+        uint64_t nchashtbl;
+        uint64_t nchashmask;
 	} kernelConstant;
 
 	struct {
 		uint64_t usesPACBypass;
 		char *rootPath;
+        uint64_t jbrand;
 	} jailbreakInfo;
 
 	struct {
@@ -115,8 +118,45 @@ struct system_info {
 		} proc_ro;
 
 		struct {
-			uint64_t ofiles_start;
+			uint64_t ofiles_start; // fd_ofiles
 		} filedesc;
+
+        struct {
+            uint32_t fileglob; // fp_glob
+        } fileproc;
+
+        struct {
+            uint32_t vnode; // fg_data
+        } fileglob;
+
+        struct {
+            uint32_t id;
+            uint32_t usecount;
+            struct {
+                uint32_t tqh_first;
+                uint32_t tqh_last;
+            } ncchildren;
+            uint32_t parent;
+            struct {
+                uint32_t lh_first;
+            } nclinks;
+        } vnode;
+
+        struct {
+            bool smr;
+            struct {
+                uint32_t tqe_next;
+                uint32_t tqe_prev;
+            } child;
+            struct {
+                uint32_t le_next;
+                uint32_t le_prev;
+            } hash;
+            uint32_t dvp;
+            uint32_t vp;
+            uint32_t hashval;
+            uint32_t name;
+        } namecache;
 
 		struct {
 			uint32_t uid;
@@ -223,11 +263,14 @@ extern struct system_info gSystemInfo;
 	iterator(ctx, kernelConstant.smrBase); \
 	iterator(ctx, kernelConstant.PT_INDEX_MAX); \
 	iterator(ctx, kernelConstant.nsysent); \
-	iterator(ctx, kernelConstant.mach_trap_count);
+	iterator(ctx, kernelConstant.mach_trap_count); \
+    iterator(ctx, kernelConstant.nchashtbl); \
+    iterator(ctx, kernelConstant.nchashmask);
 
 #define JAILBREAK_INFO_ITERATE(ctx, iterator) \
 	iterator(ctx, jailbreakInfo.usesPACBypass); \
-	iterator(ctx, jailbreakInfo.rootPath);
+	iterator(ctx, jailbreakInfo.rootPath); \
+	iterator(ctx, jailbreakInfo.jbrand);
 
 #define KERNEL_SYMBOLS_ITERATE(ctx, iterator) \
 	iterator(ctx, kernelSymbol.perfmon_dev_open); \
@@ -303,7 +346,26 @@ extern struct system_info gSystemInfo;
 	iterator(ctx, kernelStruct.proc_ro.mach_kobj_filter_mask); \
 	\
 	iterator(ctx, kernelStruct.filedesc.ofiles_start); \
-	\
+	iterator(ctx, kernelStruct.fileproc.fileglob); \
+    iterator(ctx, kernelStruct.fileglob.vnode); \
+    \
+    iterator(ctx, kernelStruct.vnode.id); \
+    iterator(ctx, kernelStruct.vnode.usecount); \
+    iterator(ctx, kernelStruct.vnode.ncchildren.tqh_first); \
+    iterator(ctx, kernelStruct.vnode.ncchildren.tqh_last); \
+    iterator(ctx, kernelStruct.vnode.parent); \
+    iterator(ctx, kernelStruct.vnode.nclinks.lh_first); \
+    \
+    iterator(ctx, kernelStruct.namecache.smr); \
+    iterator(ctx, kernelStruct.namecache.child.tqe_next); \
+    iterator(ctx, kernelStruct.namecache.child.tqe_prev); \
+    iterator(ctx, kernelStruct.namecache.hash.le_next); \
+    iterator(ctx, kernelStruct.namecache.hash.le_prev); \
+    iterator(ctx, kernelStruct.namecache.dvp); \
+    iterator(ctx, kernelStruct.namecache.vp); \
+    iterator(ctx, kernelStruct.namecache.hashval); \
+    iterator(ctx, kernelStruct.namecache.name); \
+    \
 	iterator(ctx, kernelStruct.ucred.uid); \
 	iterator(ctx, kernelStruct.ucred.ruid); \
 	iterator(ctx, kernelStruct.ucred.svuid); \

@@ -28,6 +28,12 @@ static int platform_stage_jailbreak_update(const char *updateTar)
 	return 1;
 }
 
+static int platform_unsandbox(const char *dir, const char *file, int log_fd)
+{
+    extern int unsandbox(const char *dir, const char *file, int log_fd);
+    return unsandbox(dir, file, log_fd);
+}
+
 struct jbserver_domain gPlatformDomain = {
 	.permissionHandler = platform_domain_allowed,
 	.actions = {
@@ -48,6 +54,16 @@ struct jbserver_domain gPlatformDomain = {
 				{ 0 },
 			},
 		},
+        // JBS_PLATFORM_UNSANDBOX
+        {
+                .handler = platform_unsandbox,
+                .args = (jbserver_arg[]){
+                        { .name = "dir", .type = JBS_TYPE_STRING, .out = false },
+                        { .name = "file", .type = JBS_TYPE_STRING, .out = false },
+                        { .name = "log-fd", .type = JBS_TYPE_FD, .out = false },
+                        { 0 },
+                },
+        },
 		{ 0 },
 	},
 };

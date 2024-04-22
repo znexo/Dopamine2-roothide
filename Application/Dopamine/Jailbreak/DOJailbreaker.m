@@ -76,12 +76,13 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
             "struct",
             "physrw",
             "perfkrw",
+            "namecache",
             NULL,
             NULL,
             NULL,
         };
 
-        uint32_t idx = 7;
+        uint32_t idx = 8;
         if (xpf_set_is_supported("devmode")) {
             sets[idx++] = "devmode"; 
         }
@@ -284,10 +285,34 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
     return nil;
 }
 
+int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
+
 - (NSError *)loadBasebinTrustcache
 {
+    cdhash_t* basebins_cdhashes=NULL;
+    uint32_t basebins_cdhashesCount=0;
+
+    NSDirectoryEnumerator<NSURL *> *directoryEnumerator = [[NSFileManager defaultManager] enumeratorAtURL:[NSURL fileURLWithPath:jbroot(@"/basebin/")] includingPropertiesForKeys:nil options:0 errorHandler:nil];
+                                            
+    for(NSURL* fileURL in directoryEnumerator)
+    {
+        cdhash_t cdhash={0};
+        if(ensure_randomized_cdhash(fileURL.path.fileSystemRepresentation, cdhash) == 0) {
+            basebins_cdhashes = realloc(basebins_cdhashes, (basebins_cdhashesCount+1) * sizeof(cdhash_t));
+            memcpy(&basebins_cdhashes[basebins_cdhashesCount], cdhash, sizeof(cdhash_t));
+            basebins_cdhashesCount++;
+        }
+    }
+    
+    if(!basebins_cdhashes) {
+        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedBasebinTrustcache userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to build BaseBin trustcache"]}];
+    }
+    
     trustcache_file_v1 *basebinTcFile = NULL;
-    if (trustcache_file_build_from_path([[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"basebin.tc"].fileSystemRepresentation, &basebinTcFile) == 0) {
+    int r = trustcache_file_build_from_cdhashes(basebins_cdhashes, basebins_cdhashesCount, &basebinTcFile);
+    free(basebins_cdhashes);
+    
+    if (r == 0) {
         int r = trustcache_file_upload_with_uuid(basebinTcFile, BASEBIN_TRUSTCACHE_UUID);
         free(basebinTcFile);
         if (r != 0) return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedBasebinTrustcache userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to upload BaseBin trustcache: %d", r]}];
@@ -351,39 +376,39 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
     return nil;
 }
 
-- (NSError *)createFakeLib
-{
-    int r = exec_cmd(JBRootPath("/basebin/jbctl"), "internal", "fakelib_init", NULL);
-    if (r != 0) {
-        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Creating fakelib failed with error: %d", r]}];
-    }
-
-    cdhash_t *cdhashes;
-    uint32_t cdhashesCount;
-    macho_collect_untrusted_cdhashes(JBRootPath("/basebin/.fakelib/dyld"), NULL, NULL, &cdhashes, &cdhashesCount);
-    if (cdhashesCount != 1) return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Got unexpected number of cdhashes for dyld???: %d", cdhashesCount]}];
-    
-    trustcache_file_v1 *dyldTCFile = NULL;
-    r = trustcache_file_build_from_cdhashes(cdhashes, cdhashesCount, &dyldTCFile);
-    free(cdhashes);
-    if (r == 0) {
-        int r = trustcache_file_upload_with_uuid(dyldTCFile, DYLD_TRUSTCACHE_UUID);
-        if (r != 0) return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to upload dyld trustcache: %d", r]}];
-        free(dyldTCFile);
-    }
-    else {
-        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : @"Failed to build dyld trustcache"}];
-    }
-    
-    r = exec_cmd(JBRootPath("/basebin/jbctl"), "internal", "fakelib_mount", NULL);
-    if (r != 0) {
-        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Mounting fakelib failed with error: %d", r]}];
-    }
-    
-    // Now that fakelib is up, we want to make systemhook inject into any binary we spawn
-    setenv("DYLD_INSERT_LIBRARIES", "/usr/lib/systemhook.dylib", 1);
-    return nil;
-}
+//- (NSError *)createFakeLib
+//{
+//    int r = exec_cmd(JBRootPath("/basebin/jbctl"), "internal", "fakelib_init", NULL);
+//    if (r != 0) {
+//        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Creating fakelib failed with error: %d", r]}];
+//    }
+//
+//    cdhash_t *cdhashes;
+//    uint32_t cdhashesCount;
+//    macho_collect_untrusted_cdhashes(JBRootPath("/basebin/.fakelib/dyld"), NULL, NULL, &cdhashes, &cdhashesCount);
+//    if (cdhashesCount != 1) return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Got unexpected number of cdhashes for dyld???: %d", cdhashesCount]}];
+//
+//    trustcache_file_v1 *dyldTCFile = NULL;
+//    r = trustcache_file_build_from_cdhashes(cdhashes, cdhashesCount, &dyldTCFile);
+//    free(cdhashes);
+//    if (r == 0) {
+//        int r = trustcache_file_upload_with_uuid(dyldTCFile, DYLD_TRUSTCACHE_UUID);
+//        if (r != 0) return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to upload dyld trustcache: %d", r]}];
+//        free(dyldTCFile);
+//    }
+//    else {
+//        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : @"Failed to build dyld trustcache"}];
+//    }
+//
+//    r = exec_cmd(JBRootPath("/basebin/jbctl"), "internal", "fakelib_mount", NULL);
+//    if (r != 0) {
+//        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Mounting fakelib failed with error: %d", r]}];
+//    }
+//
+//    // Now that fakelib is up, we want to make systemhook inject into any binary we spawn
+//    setenv("DYLD_INSERT_LIBRARIES", "/usr/lib/systemhook.dylib", 1);
+//    return nil;
+//}
 
 - (NSError *)ensureNoDuplicateApps
 {
@@ -482,9 +507,6 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
     if (*errOut) return;
     *errOut = [self ensureDevModeEnabled];
     if (*errOut) return;
-
-    // Now that we are unsandboxed, populate the jailbreak root path
-    [[DOEnvironmentManager sharedManager] ensureJailbreakRootExists];
     
     if (removeJailbreakEnabled) {
         [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Removing Jailbreak") debug:NO];
@@ -495,12 +517,13 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
     
     *errOut = [[DOEnvironmentManager sharedManager] prepareBootstrap];
     if (*errOut) return;
-    setenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/var/jb/sbin:/var/jb/bin:/var/jb/usr/sbin:/var/jb/usr/bin", 1);
+    
+    setenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/rootfs/sbin:/rootfs/bin:/rootfs/usr/sbin:/rootfs/usr/bin", 1);
     setenv("TERM", "xterm-256color", 1);
     
     if (!tweaksEnabled) {
         printf("Creating safe mode marker file since tweaks were disabled in settings\n");
-        [[NSData data] writeToFile:NSJBRootPath(@"/basebin/.safe_mode") atomically:YES];
+        [[NSData data] writeToFile:NSJBRootPath(@"/var/.safe_mode") atomically:YES];
     }
     
     [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Loading BaseBin TrustCache") debug:NO];
@@ -511,24 +534,26 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
     *errOut = [self injectLaunchdHook];
     if (*errOut) return;
     
-    [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Applying Bind Mount") debug:NO];
-    *errOut = [self createFakeLib];
-    if (*errOut) return;
+//    [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Applying Bind Mount") debug:NO];
+//    *errOut = [self createFakeLib];
+//    if (*errOut) return;
     
-    // Unsandbox iconservicesagent so that app icons can work
-    exec_cmd_trusted(JBRootPath("/usr/bin/killall"), "-9", "iconservicesagent", NULL);
+    setenv("DYLD_INSERT_LIBRARIES", JBRootPath("/basebin/systemhook.dylib"), 1);
+    
+//    // Unsandbox iconservicesagent so that app icons can work
+//    exec_cmd_trusted(JBRootPath("/usr/bin/killall"), "-9", "iconservicesagent", NULL);
     
     *errOut = [self finalizeBootstrapIfNeeded];
     if (*errOut) return;
     
     [[DOEnvironmentManager sharedManager] setIDownloadEnabled:idownloadEnabled needsUnsandbox:NO];
     
-    [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Checking For Duplicate Apps") debug:NO];
-    *errOut = [self ensureNoDuplicateApps];
-    if (*errOut) {
-        *showLogs = NO;
-        return;
-    }
+//    [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Checking For Duplicate Apps") debug:NO];
+//    *errOut = [self ensureNoDuplicateApps];
+//    if (*errOut) {
+//        *showLogs = NO;
+//        return;
+//    }
     
     //printf("Starting launch daemons...\n");
     //exec_cmd_trusted(JBRootPath("/usr/bin/launchctl"), "bootstrap", "system", JBRootPath("/Library/LaunchDaemons"), NULL);

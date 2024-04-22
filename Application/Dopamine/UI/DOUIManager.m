@@ -208,6 +208,8 @@
 
 - (void)sendLog:(NSString*)log debug:(BOOL)debug update:(BOOL)update
 {
+    NSLog(@"sendLog: %@", log);
+    
     if (!self.logView || !log)
         return;
 

@@ -233,22 +233,6 @@
                 [specifiers addObject:refreshAppsSpecifier];
             }
             if ((envManager.isJailbroken || envManager.isInstalledThroughTrollStore) && envManager.isBootstrapped) {
-                PSSpecifier *hideUnhideJailbreakSpecifier = [PSSpecifier emptyGroupSpecifier];
-                hideUnhideJailbreakSpecifier.target = self;
-                [hideUnhideJailbreakSpecifier setProperty:@"DOButtonCell" forKey:@"headerCellClass"];
-                if (envManager.isJailbreakHidden) {
-                    [hideUnhideJailbreakSpecifier setProperty:@"Button_Unhide_Jailbreak" forKey:@"title"];
-                    [hideUnhideJailbreakSpecifier setProperty:@"eye" forKey:@"image"];
-                }
-                else {
-                    [hideUnhideJailbreakSpecifier setProperty:@"Button_Hide_Jailbreak" forKey:@"title"];
-                    [hideUnhideJailbreakSpecifier setProperty:@"eye.slash" forKey:@"image"];
-                }
-                [hideUnhideJailbreakSpecifier setProperty:@"hideUnhideJailbreakPressed" forKey:@"action"];
-                BOOL hideJailbreakButtonShown = (envManager.isJailbroken || (envManager.isInstalledThroughTrollStore && envManager.isBootstrapped && !envManager.isJailbreakHidden));
-                if (hideJailbreakButtonShown) {
-                    [specifiers addObject:hideUnhideJailbreakSpecifier];
-                }
                 
                 PSSpecifier *removeJailbreakSpecifier = [PSSpecifier emptyGroupSpecifier];
                 removeJailbreakSpecifier.target = self;
@@ -256,15 +240,17 @@
                 [removeJailbreakSpecifier setProperty:@"DOButtonCell" forKey:@"headerCellClass"];
                 [removeJailbreakSpecifier setProperty:@"trash" forKey:@"image"];
                 [removeJailbreakSpecifier setProperty:@"removeJailbreakPressed" forKey:@"action"];
-                if (hideJailbreakButtonShown) {
-                    if (envManager.isJailbroken) {
-                        [removeJailbreakSpecifier setProperty:DOLocalizedString(@"Hint_Hide_Jailbreak_Jailbroken") forKey:@"footerText"];
-                    }
-                    else {
-                        [removeJailbreakSpecifier setProperty:DOLocalizedString(@"Hint_Hide_Jailbreak") forKey:@"footerText"];
-                    }
-                }
+                
                 [specifiers addObject:removeJailbreakSpecifier];
+            }
+            if(envManager.isJailbroken || envManager.isInstalledThroughTrollStore){
+                PSSpecifier *rebootDeviceSpecifier = [PSSpecifier emptyGroupSpecifier];
+                rebootDeviceSpecifier.target = self;
+                [rebootDeviceSpecifier setProperty:@"Button_Reboot_Device" forKey:@"title"];
+                [rebootDeviceSpecifier setProperty:@"DOButtonCell" forKey:@"headerCellClass"];
+                [rebootDeviceSpecifier setProperty:@"arrow.clockwise.circle" forKey:@"image"];
+                [rebootDeviceSpecifier setProperty:@"rebootDevicePressed" forKey:@"action"];
+                [specifiers addObject:rebootDeviceSpecifier];
             }
         }
         
@@ -377,13 +363,6 @@
     [[DOEnvironmentManager sharedManager] refreshJailbreakApps];
 }
 
-- (void)hideUnhideJailbreakPressed
-{
-    DOEnvironmentManager *envManager = [DOEnvironmentManager sharedManager];
-    [envManager setJailbreakHidden:!envManager.isJailbreakHidden];
-    [self reloadSpecifiers];
-}
-
 - (void)removeJailbreakPressed
 {
     UIAlertController *confirmationAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Alert_Remove_Jailbreak_Title") message:DOLocalizedString(@"Alert_Remove_Jailbreak_Pressed_Body") preferredStyle:UIAlertControllerStyleAlert];
@@ -406,6 +385,19 @@
     [confirmationAlertController addAction:cancelAction];
     [self presentViewController:confirmationAlertController animated:YES completion:nil];
 }
+
+- (void)rebootDevicePressed
+{
+    UIAlertController *confirmationAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Alert_Reboot_Device_Title") message:DOLocalizedString(@"Alert_Reboot_Device_Pressed_Body") preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *rebootAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Continue") style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+        [[DOEnvironmentManager sharedManager] reboot];
+    }];
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Cancel") style:UIAlertActionStyleDefault handler:nil];
+    [confirmationAlertController addAction:rebootAction];
+    [confirmationAlertController addAction:cancelAction];
+    [self presentViewController:confirmationAlertController animated:YES completion:nil];
+}
+
 
 - (void)resetSettingsPressed
 {

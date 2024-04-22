@@ -96,91 +96,12 @@ int reboot3(uint64_t flags, ...);
 
 - (void)locateJailbreakRoot
 {
-    if (!gSystemInfo.jailbreakInfo.rootPath) {
-        NSString *activePrebootPath = [self activePrebootPath];
-        
-        NSString *randomizedJailbreakPath;
-        
-        // First attempt at finding jailbreak root, look for Dopamine 2.x path
-        for (NSString *subItem in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:activePrebootPath error:nil]) {
-            if (subItem.length == 15 && [subItem hasPrefix:@"dopamine-"]) {
-                randomizedJailbreakPath = [activePrebootPath stringByAppendingPathComponent:subItem];
-                break;
-            }
-        }
-        
-        if (!randomizedJailbreakPath) {
-            // Second attempt at finding jailbreak root, look for Dopamine 1.x path, but as other jailbreaks use it too, make sure it is Dopamine
-            // Some other jailbreaks also commit the sin of creating .installed_dopamine, for these we try to filter them out by checking for their installed_ file
-            // If we find this and are sure it's from Dopamine 1.x, rename it so all Dopamine 2.x users will have the same path
-            for (NSString *subItem in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:activePrebootPath error:nil]) {
-                if (subItem.length == 9 && [subItem hasPrefix:@"jb-"]) {
-                    NSString *candidateLegacyPath = [activePrebootPath stringByAppendingPathComponent:subItem];
-                    
-                    BOOL installedDopamine = [[NSFileManager defaultManager] fileExistsAtPath:[candidateLegacyPath stringByAppendingPathComponent:@"procursus/.installed_dopamine"]];
-                    
-                    if (installedDopamine) {
-                        // Hopefully all other jailbreaks that use jb-<UUID>?
-                        // These checks exist because of dumb users (and jailbreak developers) creating .installed_dopamine on jailbreaks that are NOT dopamine...
-                        BOOL installedNekoJB = [[NSFileManager defaultManager] fileExistsAtPath:[candidateLegacyPath stringByAppendingPathComponent:@"procursus/.installed_nekojb"]];
-                        BOOL installedDefinitelyNotAGoodName = [[NSFileManager defaultManager] fileExistsAtPath:[candidateLegacyPath stringByAppendingPathComponent:@"procursus/.xia0o0o0o_jb_installed"]];
-                        BOOL installedPalera1n = [[NSFileManager defaultManager] fileExistsAtPath:[candidateLegacyPath stringByAppendingPathComponent:@"procursus/.palecursus_strapped"]];
-                        if (installedNekoJB || installedPalera1n || installedDefinitelyNotAGoodName) {
-                            continue;
-                        }
-                        
-                        randomizedJailbreakPath = candidateLegacyPath;
-                        _bootstrapNeedsMigration = YES;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if (randomizedJailbreakPath) {
-            NSString *jailbreakRootPath = [randomizedJailbreakPath stringByAppendingPathComponent:@"procursus"];
-            if ([[NSFileManager defaultManager] fileExistsAtPath:jailbreakRootPath]) {
-                // This attribute serves as the primary source of what the root path is
-                // Anything else in the jailbreak will get it from here
-                gSystemInfo.jailbreakInfo.rootPath = strdup(jailbreakRootPath.fileSystemRepresentation);
-            }
-        }
-    }
-}
-
-- (void)ensureJailbreakRootExists
-{
-    [self locateJailbreakRoot];
+    if(gSystemInfo.jailbreakInfo.rootPath) free(gSystemInfo.jailbreakInfo.rootPath);
     
-    if (!gSystemInfo.jailbreakInfo.rootPath || _bootstrapNeedsMigration) {
-        [_bootstrapper ensurePrivatePrebootIsWritable];
-
-        NSString *activePrebootPath = [self activePrebootPath];
-
-        NSString *characterSet = @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        NSUInteger stringLen = 6;
-        NSMutableString *randomString = [NSMutableString stringWithCapacity:stringLen];
-        for (NSUInteger i = 0; i < stringLen; i++) {
-            NSUInteger randomIndex = arc4random_uniform((uint32_t)[characterSet length]);
-            unichar randomCharacter = [characterSet characterAtIndex:randomIndex];
-            [randomString appendFormat:@"%C", randomCharacter];
-        }
-        
-        NSString *randomJailbreakFolderName = [NSString stringWithFormat:@"dopamine-%@", randomString];
-        NSString *randomizedJailbreakPath = [activePrebootPath stringByAppendingPathComponent:randomJailbreakFolderName];
-        NSString *jailbreakRootPath = [randomizedJailbreakPath stringByAppendingPathComponent:@"procursus"];
-        
-        if (_bootstrapNeedsMigration) {
-            NSString *oldRandomizedJailbreakPath = [[NSString stringWithUTF8String:gSystemInfo.jailbreakInfo.rootPath] stringByDeletingLastPathComponent];
-            [[NSFileManager defaultManager] moveItemAtPath:oldRandomizedJailbreakPath toPath:randomizedJailbreakPath error:nil];
-        }
-        else {
-            if (![[NSFileManager defaultManager] fileExistsAtPath:jailbreakRootPath]) {
-                [[NSFileManager defaultManager] createDirectoryAtPath:jailbreakRootPath withIntermediateDirectories:YES attributes:nil error:nil];
-            }
-        }
-        
-        gSystemInfo.jailbreakInfo.rootPath = strdup(jailbreakRootPath.UTF8String);
+    NSString* jbroot_path = find_jbroot();
+    if(jbroot_path) {
+        gSystemInfo.jailbreakInfo.rootPath = strdup(jbroot_path.fileSystemRepresentation);
+        gSystemInfo.jailbreakInfo.jbrand = jbrand();
     }
 }
 
@@ -355,13 +276,25 @@ int reboot3(uint64_t flags, ...);
     }];
 }
 
+- (void)doReboot
+{
+    if (reboot3(0x8000000000000000, 0) != 0) {
+        sync();
+        reboot(0);
+    }
+}
+
 - (void)reboot
 {
-    [self runAsRoot:^{
-        [self runUnsandboxed:^{
-            reboot3(0x8000000000000000, 0);
+    if ([self isJailbroken] == true) {
+        [self runAsRoot:^{
+            [self runUnsandboxed:^{
+                [self doReboot];
+            }];
         }];
-    }];
+    }else{
+        [self runTrollStoreAction:@"reboot"];
+    }
 }
 
 - (NSError*)updateEnvironment
@@ -389,12 +322,12 @@ int reboot3(uint64_t flags, ...);
 
 - (BOOL)isTweakInjectionEnabled
 {
-    return ![[NSFileManager defaultManager] fileExistsAtPath:NSJBRootPath(@"/basebin/.safe_mode")];
+    return ![[NSFileManager defaultManager] fileExistsAtPath:NSJBRootPath(@"/var/.safe_mode")];
 }
 
 - (void)setTweakInjectionEnabled:(BOOL)enabled
 {
-    NSString *safeModePath = NSJBRootPath(@"/basebin/.safe_mode");
+    NSString *safeModePath = NSJBRootPath(@"/var/.safe_mode");
     if ([self isJailbroken]) {
         [self runAsRoot:^{
             [self runUnsandboxed:^{
@@ -474,50 +407,6 @@ int reboot3(uint64_t flags, ...);
     
     if (!loaded) {
         [self setIDownloadEnabled:loaded needsUnsandbox:needsUnsandbox];
-    }
-}
-
-- (BOOL)isJailbreakHidden
-{
-    return ![[NSFileManager defaultManager] fileExistsAtPath:@"/var/jb"];
-}
-
-- (void)setJailbreakHidden:(BOOL)hidden
-{
-    if (hidden && ![self isJailbroken] && geteuid() != 0) {
-        [self runTrollStoreAction:@"hide-jailbreak"];
-        return;
-    }
-    
-    void (^actionBlock)(void) = ^{
-        BOOL alreadyHidden = [self isJailbreakHidden];
-        if (hidden != alreadyHidden) {
-            if (hidden) {
-                if ([self isJailbroken]) {
-                    [self unregisterJailbreakApps];
-                    [[NSFileManager defaultManager] removeItemAtPath:NSJBRootPath(@"/basebin/.fakelib/systemhook.dylib") error:nil];
-                    carbonCopy(NSJBRootPath(@"/basebin/.dyld.orig"), NSJBRootPath(@"/basebin/.fakelib/dyld"));
-                }
-                [[NSFileManager defaultManager] removeItemAtPath:@"/var/jb" error:nil];
-            }
-            else {
-                [[NSFileManager defaultManager] createSymbolicLinkAtPath:@"/var/jb" withDestinationPath:NSJBRootPath(@"/") error:nil];
-                if ([self isJailbroken]) {
-                    carbonCopy(NSJBRootPath(@"/basebin/.dyld.patched"), NSJBRootPath(@"/basebin/.fakelib/dyld"));
-                    carbonCopy(NSJBRootPath(@"/basebin/systemhook.dylib"), NSJBRootPath(@"/basebin/.fakelib/systemhook.dylib"));
-                    [self refreshJailbreakApps];
-                }
-            }
-        }
-    };
-    
-    if ([self isJailbroken]) {
-        [self runAsRoot:^{
-            [self runUnsandboxed:actionBlock];
-        }];
-    }
-    else {
-        actionBlock();
     }
 }
 

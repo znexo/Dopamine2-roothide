@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <xpc/xpc.h>
+#include <xpc_private.h>
 
 typedef enum {
     JBS_TYPE_BOOL,
@@ -13,6 +14,7 @@ typedef enum {
     JBS_TYPE_ARRAY,
 	JBS_TYPE_DICTIONARY,
 	JBS_TYPE_CALLER_TOKEN,
+    JBS_TYPE_FD,
 } jbserver_type;
 
 typedef struct s_jbserver_arg
@@ -52,6 +54,10 @@ enum {
     JBS_SYSTEMWIDE_PROCESS_CHECKIN,
     JBS_SYSTEMWIDE_FORK_FIX,
     JBS_SYSTEMWIDE_CS_REVALIDATE,
+    JBS_SYSTEMWIDE_CS_DROP_GET_TASK_ALLOW,
+    JBS_SYSTEMWIDE_PATCH_SPAWN,
+    JBS_SYSTEMWIDE_PATCH_EXEC_ADD,
+    JBS_SYSTEMWIDE_PATCH_EXEC_DEL,
     // JBS_SYSTEMWIDE_LOCK_PAGE,
 };
 
@@ -61,6 +67,7 @@ enum {
 enum {
     JBS_PLATFORM_SET_PROCESS_DEBUGGED = 1,
     JBS_PLATFORM_STAGE_JAILBREAK_UPDATE,
+    JBS_PLATFORM_UNSANDBOX,
     JBS_PLATFORM_SET_JAILBREAK_VISIBLE,
 };
 
