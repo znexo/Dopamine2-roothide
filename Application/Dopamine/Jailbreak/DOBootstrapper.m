@@ -580,7 +580,7 @@ int getCFMajorVersion(void)
         
     } else if([fm fileExistsAtPath:jbroot(@"/.bootstrapped")] || [fm fileExistsAtPath:jbroot(@"/.thebootstrapped")]) {
         
-            completion([NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedExtracting userInfo:@{NSLocalizedDescriptionKey : @"Your device has been bootstrapped through the Bootstrap app, please uninstall it before jailbreaking."}]);
+            completion([NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedExtracting userInfo:@{NSLocalizedDescriptionKey : @"\n\nYour device has been bootstrapped through the Bootstrap app, please disable tweak for apps in AppList and UnBootstrap before jailbreaking.\n\n\n"}]);
             return -1;
         
     } else if(![fm fileExistsAtPath:jbroot(@"/.installed_dopamine")]) {
@@ -606,7 +606,7 @@ int getCFMajorVersion(void)
         
         NSString* dopamineVersion = [NSString stringWithContentsOfFile:jbroot(@"/.installed_dopamine") encoding:NSUTF8StringEncoding error:nil];
         if(dopamineVersion.intValue != DOPAMINE_INSTALL_VERSION) {
-            completion([NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedExtracting userInfo:@{NSLocalizedDescriptionKey : @"Your device has been jailbroken through roothide Dopamine 1.x, please uninstall it before jailbreaking."}]);
+            completion([NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedExtracting userInfo:@{NSLocalizedDescriptionKey : @"\n\nroothide Doapmine 1 is already installed on your device.\n\n\n"}]);
             return -1;
         }
         

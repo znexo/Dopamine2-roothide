@@ -105,7 +105,7 @@ int main(int argc, char* argv[])
 				return 5;
 			}
 
-			LSApplicationProxy *dopamineAppProxy = [LSApplicationProxy applicationProxyForIdentifier:@"com.opa334.Dopamine"];
+			LSApplicationProxy *dopamineAppProxy = [LSApplicationProxy applicationProxyForIdentifier:@"com.opa334.Dopamine-roothide"];
 			if (!dopamineAppProxy) {
 				printf("Unable to locate newly installed Dopamine build.\n");
 				return 6;
