@@ -132,7 +132,7 @@ int posix_spawn_hook(pid_t *restrict pidp, const char *restrict path,
 		envbuf_unsetenv(&envc, "_SafeMode");
 		envbuf_unsetenv(&envc, "_MSSafeMode");
 
-        int ret = posix_spawn_orig_wrapper(pidp, path, file_actions, attrp, argv, envp);
+        int ret = posix_spawn_orig_wrapper(pidp, path, file_actions, attrp, argv, envc);
 
 		envbuf_free(envc);
 
