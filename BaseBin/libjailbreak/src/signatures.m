@@ -99,7 +99,7 @@ int calc_cdhash(uint8_t *cdBlob, size_t cdBlobSize, uint8_t hashtype, void *cdha
     return 0;
 }
 
-int ensure_randomized_cdhash(char* inputPath, void* cdhashOut)
+int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut)
 {
 	if(access(inputPath, W_OK) != 0)
 		return -1;
@@ -118,6 +118,8 @@ int ensure_randomized_cdhash(char* inputPath, void* cdhashOut)
 
 	__block int foundCount = 0;
     __block uint64_t textsegoffset = 0;
+    __block uint64_t firstsectoffset = 0;
+	__block struct section_64 firstsection={0};
     __block struct segment_command_64 textsegment={0};
     __block struct linkedit_data_command linkedit={0};
 
@@ -130,6 +132,18 @@ int ensure_randomized_cdhash(char* inputPath, void* cdhashOut)
 
 			textsegoffset = offset;
 			textsegment = *segmentCommand;
+
+			if(segmentCommand->nsects==0) {
+				*stop=true;
+				return;
+			}
+
+			firstsectoffset = textsegoffset + sizeof(*segmentCommand);
+			firstsection = *(struct section_64*)((uint64_t)segmentCommand + sizeof(*segmentCommand));
+			if (strcmp(firstsection.segname, "__TEXT") != 0) {
+				*stop=true;
+				return;
+			}
 			
 			*stop = foundOne;
 			foundOne = true;
@@ -153,7 +167,8 @@ int ensure_randomized_cdhash(char* inputPath, void* cdhashOut)
 	}
 
     uint64_t* rd = (uint64_t*)&(textsegment.segname[sizeof(textsegment.segname)-sizeof(uint64_t)]);
-    JBLogDebug("__TEXT: %llx,%llx, %016llX\n", textsegoffset, textsegment.fileoff, *rd);
+    uint64_t* rd2 = (uint64_t*)&(firstsection.segname[sizeof(firstsection.segname)-sizeof(uint64_t)]);
+    JBLogDebug("__TEXT: %llx,%llx, %016llX %016llX\n", textsegoffset, textsegment.fileoff, *rd, *rd2);
 
     int retval=-1;
 
@@ -177,16 +192,23 @@ int ensure_randomized_cdhash(char* inputPath, void* cdhashOut)
 	{
 		CS_DecodedBlob *bestCDBlob = csd_superblob_find_best_code_directory(decodedSuperblob);
 		if(!bestCDBlob) break;
-		
-		if(*rd == jbinfo(jbrand)) 
+
+		if(*rd==0 && *rd2 == jbinfo(jbrand)) 
 		{
 			retval = csd_code_directory_calculate_hash(bestCDBlob, cdhashOut);
 			break;
 		}
 
-		*rd = jbinfo(jbrand);
+		if(*rd != 0) //fix it patched on previous version
+		{
+			*rd = 0;
+			if(memory_stream_write(fat->stream, macho->archDescriptor.offset + textsegoffset, sizeof(textsegment), &textsegment) != 0) {
+				break;
+			}
+		}
 
-		if(memory_stream_write(fat->stream, macho->archDescriptor.offset + textsegoffset, sizeof(textsegment), &textsegment) != 0) {
+		*rd2 = jbinfo(jbrand);
+		if(memory_stream_write(fat->stream, macho->archDescriptor.offset + firstsectoffset, sizeof(firstsection), &firstsection) != 0) {
 			break;
 		}
 				
