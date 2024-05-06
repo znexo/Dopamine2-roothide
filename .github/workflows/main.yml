@@ -1,16 +1,6 @@
 name: "*** build Dopamine2-roothide.tipa ***"
 
 on:
-  push:
-    branches:
-      - '*'
-    paths-ignore:
-      - ".gitignore"
-  pull_request:
-    branches:
-      - '*'
-    paths-ignore:
-      - ".gitignore"
   workflow_dispatch:
 
 concurrency:
