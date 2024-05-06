@@ -8,6 +8,7 @@
 #import "DOEnvironmentManager.h"
 
 #import <sys/sysctl.h>
+#include <sys/mount.h>
 #import <mach-o/dyld.h>
 #import <libgrabkernel/libgrabkernel.h>
 #import <libjailbreak/info.h>
@@ -134,8 +135,21 @@ int reboot3(uint64_t flags, ...);
     return trollstoreInstallation;
 }
 
+- (BOOL)isRootlessDopamineJailbroken
+{
+     struct statfs fs;
+     int sfsret = statfs("/usr/lib", &fs);
+     if (sfsret == 0) {
+         return strcmp(fs.f_mntonname, "/usr/lib")==0;
+     }
+     return NO;
+}
+
 - (BOOL)isJailbroken
 {
+    if([self isRootlessDopamineJailbroken])
+        return NO;
+    
     static BOOL jailbroken = NO;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{

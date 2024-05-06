@@ -9,3 +9,9 @@
 - Discord: https://discord.com/invite/scqCkumAYp
 
 
+# How To Build
+
+fork this repo then run github Action to generate tipa file.
+
+ref to build script: [.github/workflows/main.yml](.github/workflows/main.yml)
+

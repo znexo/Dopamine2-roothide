@@ -69,6 +69,9 @@ rootlesshooks: .build .include
 	mkdir -p .build
 	cp -r _external/basebin/* .build
 	cp _external/basebin/.version .build
+ifeq ($(NIGHTLY), 1)
+	echo $(COMMIT_HASH) > .build/.version
+endif
 
 .include:
 	rm -rf .include

@@ -354,7 +354,7 @@ void loadForkFix(void)
 			// If tweaks have been loaded into this process, we need to load forkfix to ensure forking will work
 			// Optimization: If the process cannot fork at all due to sandbox, we don't need to do anything
 			if (sandbox_check(getpid(), "process-fork", SANDBOX_CHECK_NO_REPORT, NULL) == 0) {
-				dlopen(JBRootPath("/basebin/forkfix.dylib"), RTLD_NOW);
+				assert(dlopen(JBRootPath("/basebin/forkfix.dylib"), RTLD_NOW));
 			}
 		});
 	}
