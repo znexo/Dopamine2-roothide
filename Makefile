@@ -2,7 +2,7 @@ export NIGHTLY ?= 1
 export ENABLE_LOGS ?= 1
 
 ifeq ($(NIGHTLY), 1)
-export COMMIT_HASH = $(shell git describe --tags)
+export COMMIT_HASH = $(shell git describe --tags --abbrev=0)
 endif
 
 export DOPAMINE_VERSION = $(shell cat ./BaseBin/_external/basebin/.version)

@@ -1,4 +1,4 @@
-name: "roothide: build and upload"
+name: "*** build Dopamine2-roothide.tipa ***"
 
 on:
   push:
@@ -25,7 +25,17 @@ jobs:
         uses: actions/checkout@v3
         with:
             submodules: recursive
+            fetch-depth: 0
+            fetch-tags: true
 
+      - name: Tags
+        run: |
+          set -x
+          git fetch --tags https://github.com/roothide/Dopamine2-roothide
+          git tag
+          git log --first-parent --pretty=%d
+          git describe --tags --abbrev=0
+          
       - name: Install Procursus
         uses: dhinakg/procursus-action@main
         with:
@@ -74,11 +84,14 @@ jobs:
           export BASEDIR="$(pwd)"
           export THEOS="${BASEDIR}/theos"
           gmake -j$(sysctl -n hw.physicalcpu) NIGHTLY=1
+          TAG=$(git describe --tags --abbrev=0)
+          mv ./Application/Dopamine.tipa  "./Application/roothide-Dopamine2-${TAG}.tipa"
+          echo "tag=${TAG}" >> $GITHUB_ENV
 
       - name: Upload Artifact
         id: dopamine-latest-upload
         uses: actions/upload-artifact@v3
         with:
-          name: Dopamine2-roothide
+          name: roothide-Dopamine2-${{ env.tag }}
           path: |
-            ${{ github.workspace }}/Application/Dopamine.tipa
+            ${{ github.workspace }}/Application/roothide-Dopamine2-${{ env.tag }}.tipa

@@ -11,7 +11,7 @@
 
 # How To Build
 
-fork this repo then run github Action to generate tipa file.
+fork this repo then goto tab [Actions] -> [build Dopamine2-roothide] -> [Run Workflow] to generate tipa file.
 
-ref to build script: [.github/workflows/main.yml](.github/workflows/main.yml)
+ref to build script [.github/workflows/main.yml](.github/workflows/main.yml) if you want to build on macOS.
 
