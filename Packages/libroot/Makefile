@@ -1,27 +1,25 @@
-TARGET = libroot.dylib
-CC = clang
+ARCH = arm64 arm64e
+TARGET := iphone:clang:latest:15.0
 
-CFLAGS = -I../../BaseBin/.include -Isrc -isysroot $(shell xcrun --sdk iphoneos --show-sdk-path) -arch arm64 -arch arm64e -miphoneos-version-min=15.0 -fobjc-arc -O2
-LDFLAGS = -dynamiclib -rpath @loader_path/.jbroot
+THEOS_PACKAGE_SCHEME=roothide
 
-all: $(TARGET) sign
+include $(THEOS)/makefiles/common.mk
 
-sign: $(TARGET)
-	@ldid -S $^
+LIBRARY_NAME = libroot
 
-$(TARGET): $(wildcard src/*.c ../../BaseBin/libjailbreak/src/jbclient_xpc.c)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+libroot_FILES = libroot.c
+libroot_CFLAGS = 
+libroot_INSTALL_PATH = /usr/lib
 
-clean:
-	@rm -f $(TARGET)
-	@rm -f libroot.deb
+include $(THEOS_MAKE_PATH)/library.mk
 
-package: all
-	@mkdir -p .package/DEBIAN
-	@mkdir -p .package/usr/lib
-	@mkdir -p .package/var
-	@ln -s / .package/var/jb
-	@cp control .package/DEBIAN/control
-	@cp libroot.dylib .package/usr/lib/libroot.dylib
-	@dpkg-deb --root-owner-group -Zzstd -b .package ./libroot.deb
-	@rm -rf .package
+after-package::
+	cp ./packages/*.deb ./libroot.deb
+
+before-package::
+	rm -rf ./packages/*
+	mkdir -p $(THEOS_STAGING_DIR)/var
+	ln -s / $(THEOS_STAGING_DIR)/var/jb
+
+clean::
+	rm -rf ./packages/*
