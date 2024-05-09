@@ -27,6 +27,7 @@ int necp_session_action(int necp_fd, uint32_t action, uint8_t *in_buffer, size_t
 
 extern char **environ;
 bool gTweaksEnabled = false;
+bool gFullyDebugged = false;
 
 int ptrace(int request, pid_t pid, caddr_t addr, int data);
 #define PT_ATTACH       10      /* trace some running process */
@@ -433,6 +434,9 @@ int csops_hook(pid_t pid, unsigned int ops, void *useraddr, size_t usersize)
 			uint32_t* csflag = (uint32_t *)useraddr;
 			*csflag |= CS_VALID;
 			*csflag &= ~CS_DEBUGGED;
+			if (pid == getpid() && gFullyDebugged) {
+				*csflag |= CS_DEBUGGED;
+			}
 		}
 	}
 	return rv;
@@ -447,6 +451,9 @@ int csops_audittoken_hook(pid_t pid, unsigned int ops, void *useraddr, size_t us
 			uint32_t* csflag = (uint32_t *)useraddr;
 			*csflag |= CS_VALID;
 			*csflag &= ~CS_DEBUGGED;
+			if (pid == getpid() && gFullyDebugged) {
+				*csflag |= CS_DEBUGGED;
+			}
 		}
 	}
 	return rv;
@@ -635,7 +642,7 @@ __attribute__((constructor)) static void initializer(void)
     dladdr((void*)initializer, &di);
 	strncpy(HOOK_DYLIB_PATH, di.dli_fname, sizeof(HOOK_DYLIB_PATH));
 
-	jbclient_process_checkin(&JB_RootPath, &JB_BootUUID, &JB_SandboxExtensions);
+	jbclient_process_checkin(&JB_RootPath, &JB_BootUUID, &JB_SandboxExtensions, &gFullyDebugged);
 
 	redirectDirs(JB_RootPath);
 
@@ -658,7 +665,7 @@ __attribute__((constructor)) static void initializer(void)
 		|| strcmp(gExecutablePath, "/System/Library/CoreServices/SpringBoard.app/SpringBoard") == 0) {
 			dlopen_hook(JBRootPath("/basebin/rootlesshooks.dylib"), RTLD_NOW);
 		}
-		else if (strcmp(gExecutablePath, "/usr/libexec/watchdogd") == 0) {
+		else if (!strcmp(gExecutablePath, "/usr/libexec/watchdogd")) {
 			dlopen_hook(JBRootPath("/basebin/watchdoghook.dylib"), RTLD_NOW);
 		}
 

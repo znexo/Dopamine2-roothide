@@ -15,7 +15,43 @@
 #include "exec_patch.h"
 #include "libjailbreak/log.h"
 
+extern bool stringStartsWith(const char *str, const char* prefix);
 extern bool stringEndsWith(const char* str, const char* suffix);
+
+char *combine_strings(char separator, char **components, int count)
+{
+	if (count <= 0) return NULL;
+
+	bool isFirst = true;
+
+	size_t outLength = 1;
+	for (int i = 0; i < count; i++) {
+		if (components[i]) {
+			outLength += !isFirst + strlen(components[i]);
+			if (isFirst) isFirst = false;
+		}
+	}
+
+	isFirst = true;
+	char *outString = malloc(outLength * sizeof(char));
+	*outString = 0;
+
+	for (int i = 0; i < count; i++) {
+		if (components[i]) {
+			if (isFirst) {
+				strlcpy(outString, components[i], outLength);
+				isFirst = false;
+			}
+			else {
+				char separatorString[2] = { separator, 0 };
+				strlcat(outString, (char *)separatorString, outLength);
+				strlcat(outString, components[i], outLength);
+			}
+		}
+	}
+
+	return outString;
+}
 
 static bool systemwide_domain_allowed(audit_token_t clientToken)
 {
@@ -104,13 +140,18 @@ char* generate_sandbox_extensions(audit_token_t *processToken, bool writable)
 	return sandboxExtensionsOut;
 }
 
-static int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, char **bootUUIDOut, char **sandboxExtensionsOut)
+static int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, char **bootUUIDOut, char **sandboxExtensionsOut, bool *fullyDebuggedOut)
 {
 	// Fetch process info
 	pid_t pid = audit_token_to_pid(*processToken);
-	uint64_t proc = proc_find(pid);
 	char procPath[4*MAXPATHLEN];
-	if (proc_pidpath(pid, procPath, sizeof(procPath)) < 0) {
+	if (proc_pidpath(pid, procPath, sizeof(procPath)) <= 0) {
+		return -1;
+	}
+
+	// Find proc in kernelspace
+	uint64_t proc = proc_find(pid);
+	if (!proc) {
 		return -1;
 	}
 
@@ -125,8 +166,17 @@ static int systemwide_process_checkin(audit_token_t *processToken, char **rootPa
 	// Generate sandbox extensions for the requesting process
 	*sandboxExtensionsOut = generate_sandbox_extensions(processToken, isPlatformProcess);
 
+	bool fullyDebugged = false;
+	if (stringStartsWith(procPath, "/private/var/containers/Bundle/Application") || stringStartsWith(procPath, JBRootPath("/Applications"))) {
+		// This is an app, enable CS_DEBUGGED based on user preference
+		if (jbsetting(markAppsAsDebugged)) {
+			fullyDebugged = true;
+		}
+	}
+	*fullyDebuggedOut = fullyDebugged;
+	
 	// Allow invalid pages
-	cs_allow_invalid(proc, false);
+	cs_allow_invalid(proc, fullyDebugged);
 
 	// Fix setuid
 	struct stat sb;
@@ -374,6 +424,7 @@ struct jbserver_domain gSystemwideDomain = {
 				{ .name = "root-path", .type = JBS_TYPE_STRING, .out = true },
 				{ .name = "boot-uuid", .type = JBS_TYPE_STRING, .out = true },
 				{ .name = "sandbox-extensions", .type = JBS_TYPE_STRING, .out = true },
+				{ .name = "fully-debugged", .type = JBS_TYPE_BOOL, .out = true },
 				{ 0 },
 			},
 		},

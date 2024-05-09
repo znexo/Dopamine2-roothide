@@ -8,6 +8,8 @@
 #include "update.h"
 #include <substrate.h>
 #include <libjailbreak/log.h>
+#include <libjailbreak/util.h>
+#include <substrate.h>
 #include <mach-o/dyld.h>
 #include <sys/param.h>
 #include <sys/mount.h>
@@ -28,7 +30,12 @@ extern int systemwide_trust_binary(const char *binaryPath);
 extern int platform_set_process_debugged(uint64_t pid, bool fullyDebugged);
 
 void *posix_spawn_orig;
-extern bool gEarlyBootDone;
+extern bool gInEarlyBoot;
+
+void early_boot_done(void)
+{
+	gInEarlyBoot = false;
+}
 
 int posix_spawn_orig_wrapper(pid_t *restrict pidp, const char *restrict path,
                              const posix_spawn_file_actions_t *restrict file_actions,
@@ -112,16 +119,17 @@ int posix_spawn_hook(pid_t *restrict pidp, const char *restrict path,
         }
     }
 
-    // We can't support injection into processes that get spawned before the launchd XPC server is up
-    if (!gEarlyBootDone) {
-        if (!strcmp(path, "/usr/libexec/xpcproxy")) {
-            // The spawned process being xpcproxy indicates that the launchd XPC server is up
-            // All processes spawned including this one should be injected into
-            gEarlyBootDone = true;
-        } else {
-            return posix_spawn_orig_wrapper(pidp, path, file_actions, attrp, argv, envp);
-        }
-    }
+	// We can't support injection into processes that get spawned before the launchd XPC server is up
+	if (gInEarlyBoot) {
+		if (!strcmp(path, "/usr/libexec/xpcproxy")) {
+			// The spawned process being xpcproxy indicates that the launchd XPC server is up
+			// All processes spawned including this one should be injected into
+			early_boot_done();
+		}
+		else {
+			return posix_spawn_orig_wrapper(pidp, path, file_actions, attrp, argv, envp);
+		}
+	}
 
     if (isBlacklisted(path)) {
         JBLogDebug("blacklisted app %s", path);

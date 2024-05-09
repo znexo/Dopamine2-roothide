@@ -27,6 +27,7 @@
 #import <libjailbreak/jbserver_boomerang.h>
 #import <libjailbreak/signatures.h>
 #import <libjailbreak/jbclient_xpc.h>
+#import <libjailbreak/kcall_arm64.h>
 #import <CoreServices/LSApplicationProxy.h>
 #import "spawn.h"
 int posix_spawnattr_set_registered_ports_np(posix_spawnattr_t * __restrict attr, mach_port_t portarray[], uint32_t count);
@@ -52,8 +53,9 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
     JBErrorCodeFailedPlatformize             = -9,
     JBErrorCodeFailedBasebinTrustcache       = -10,
     JBErrorCodeFailedLaunchdInjection        = -11,
-    JBErrorCodeFailedInitFakeLib             = -12,
-    JBErrorCodeFailedDuplicateApps           = -13,
+    JBErrorCodeFailedInitProtection          = -12,
+    JBErrorCodeFailedInitFakeLib             = -13,
+    JBErrorCodeFailedDuplicateApps           = -14,
 };
 
 @implementation DOJailbreaker
@@ -80,6 +82,7 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
             NULL,
             NULL,
             NULL,
+            NULL,
         };
 
         uint32_t idx = 8;
@@ -88,6 +91,9 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
         }
         if (xpf_set_is_supported("badRecovery")) {
             sets[idx++] = "badRecovery"; 
+        }
+        if (xpf_set_is_supported("arm64kcall")) {
+            sets[idx++] = "arm64kcall"; 
         }
 
         _systemInfoXdict = xpf_construct_offset_dictionary((const char **)sets);
@@ -168,10 +174,13 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
         if ([pplBypass run] != 0) {[pacBypass cleanup]; [kernelExploit cleanup]; return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedExploitation userInfo:@{NSLocalizedDescriptionKey:@"Failed to bypass PPL"}];}
         // At this point we presume the PPL bypass gave us unrestricted phys write primitives
     }
-
-    if (@available(iOS 16.0, *)) {
-        // IOSurface kallocs don't work on iOS 16+, use these instead
+    if (!gPrimitives.kalloc_global) {
+        // IOSurface kallocs don't work on iOS 16+, use leaked page tables as allocations instead
         libjailbreak_kalloc_pt_init();
+    }
+    
+    if (![DOEnvironmentManager sharedManager].isArm64e) {
+        arm64_kcall_init();
     }
 
     return nil;
@@ -179,7 +188,13 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
 
 - (NSError *)buildPhysRWPrimitive
 {
-    int r = libjailbreak_physrw_pte_init(false);
+    int r = -1;
+    if (device_supports_physrw_pte()) {
+        r = libjailbreak_physrw_pte_init(false, 0);
+    }
+    else {
+        r = libjailbreak_physrw_init(false);
+    }
     if (r != 0) {
         return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedBuildingPhysRW userInfo:@{NSLocalizedDescriptionKey:[NSString stringWithFormat:@"Failed to build phys r/w primitive: %d", r]}];
     }
@@ -485,11 +500,15 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     BOOL removeJailbreakEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"removeJailbreakEnabled" fallback:NO];
     BOOL tweaksEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"tweakInjectionEnabled" fallback:YES];
     BOOL idownloadEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"idownloadEnabled" fallback:NO];
+    BOOL appJITEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"appJITEnabled" fallback:YES];
     
     *errOut = [self gatherSystemInformation];
     if (*errOut) return;
     *errOut = [self doExploitation];
     if (*errOut) return;
+    
+    gSystemInfo.jailbreakSettings.markAppsAsDebugged = appJITEnabled;
+    
     [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Building Phys R/W Primitive") debug:NO];
     *errOut = [self buildPhysRWPrimitive];
     if (*errOut) return;

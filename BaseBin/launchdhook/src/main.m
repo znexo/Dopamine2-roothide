@@ -20,7 +20,7 @@
 
 char HOOK_DYLIB_PATH[PATH_MAX] = {0};
 
-bool gEarlyBootDone = false;
+bool gInEarlyBoot = true;
 
 void abort_with_reason(uint32_t reason_namespace, uint64_t reason_code, const char *reason_string, uint64_t reason_flags);
 
@@ -55,7 +55,7 @@ __attribute__((constructor)) static void initializer(void)
 	else {
 		// Here we should have been injected into a live launchd on the fly
 		// In this case, we are not in early boot...
-		gEarlyBootDone = true;
+		gInEarlyBoot = false;
 		firstLoad = true;
 	}
 
