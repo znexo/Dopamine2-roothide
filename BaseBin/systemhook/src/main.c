@@ -515,6 +515,7 @@ bool shouldEnableTweaks(void)
 
 //export for PatchLoader
 __attribute__((visibility("default"))) int PLRequiredJIT() {
+	gShouldFixFork = true;
 	return 0;
 }
 
