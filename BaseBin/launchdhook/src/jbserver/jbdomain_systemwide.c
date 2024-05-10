@@ -18,39 +18,41 @@
 extern bool stringStartsWith(const char *str, const char* prefix);
 extern bool stringEndsWith(const char* str, const char* suffix);
 
-char *combine_strings(char separator, char **components, int count)
+#define APP_PATH_PREFIX "/private/var/containers/Bundle/Application/"
+
+static bool is_app_path(const char* path)
 {
-	if (count <= 0) return NULL;
+    if(!path) return false;
 
-	bool isFirst = true;
+    char rp[PATH_MAX];
+    if(!realpath(path, rp)) return false;
 
-	size_t outLength = 1;
-	for (int i = 0; i < count; i++) {
-		if (components[i]) {
-			outLength += !isFirst + strlen(components[i]);
-			if (isFirst) isFirst = false;
-		}
-	}
+    if(strncmp(rp, APP_PATH_PREFIX, sizeof(APP_PATH_PREFIX)-1) != 0)
+        return false;
 
-	isFirst = true;
-	char *outString = malloc(outLength * sizeof(char));
-	*outString = 0;
+    char* p1 = rp + sizeof(APP_PATH_PREFIX)-1;
+    char* p2 = strchr(p1, '/');
+    if(!p2) return false;
 
-	for (int i = 0; i < count; i++) {
-		if (components[i]) {
-			if (isFirst) {
-				strlcpy(outString, components[i], outLength);
-				isFirst = false;
-			}
-			else {
-				char separatorString[2] = { separator, 0 };
-				strlcat(outString, (char *)separatorString, outLength);
-				strlcat(outString, components[i], outLength);
-			}
-		}
-	}
+    //is normal app or jailbroken app/daemon?
+    if((p2 - p1) != (sizeof("xxxxxxxx-xxxx-xxxx-yxxx-xxxxxxxxxxxx")-1))
+        return false;
 
-	return outString;
+	return true;
+}
+
+bool is_sub_path(const char* parent, const char* child)
+{
+	char real_child[PATH_MAX]={0};
+	char real_parent[PATH_MAX]={0};
+
+	if(!realpath(child, real_child)) return false;
+	if(!realpath(parent, real_parent)) return false;
+
+	if(!stringStartsWith(real_child, real_parent))
+		return false;
+
+	return real_child[strlen(real_parent)] == '/';
 }
 
 static bool systemwide_domain_allowed(audit_token_t clientToken)
@@ -167,7 +169,7 @@ static int systemwide_process_checkin(audit_token_t *processToken, char **rootPa
 	*sandboxExtensionsOut = generate_sandbox_extensions(processToken, isPlatformProcess);
 
 	bool fullyDebugged = false;
-	if (stringStartsWith(procPath, "/private/var/containers/Bundle/Application") || stringStartsWith(procPath, JBRootPath("/Applications"))) {
+	if (is_app_path(procPath) || is_sub_path(JBRootPath("/Applications"), procPath)) {
 		// This is an app, enable CS_DEBUGGED based on user preference
 		if (jbsetting(markAppsAsDebugged)) {
 			fullyDebugged = true;
