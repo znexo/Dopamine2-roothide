@@ -26,7 +26,7 @@ int necp_session_action(int necp_fd, uint32_t action, uint8_t *in_buffer, size_t
 #define SYSCALL_NECP_SESSION_ACTION 0x20B
 
 extern char **environ;
-bool gTweaksEnabled = false;
+bool gShouldFixFork = false;
 bool gFullyDebugged = false;
 
 int ptrace(int request, pid_t pid, caddr_t addr, int data);
@@ -349,7 +349,7 @@ int ptrace_hook(int request, pid_t pid, caddr_t addr, int data)
 
 void loadForkFix(void)
 {
-	if (gTweaksEnabled) {
+	if (gShouldFixFork) {
 		static dispatch_once_t onceToken;
 		dispatch_once (&onceToken, ^{
 			// If tweaks have been loaded into this process, we need to load forkfix to ensure forking will work
@@ -673,6 +673,7 @@ __attribute__((constructor)) static void initializer(void)
 		// On arm64, writing to executable pages removes CS_VALID from the csflags of the process
 		// These hooks are neccessary to get the system to behave with this
 		// They are ugly but needed
+		gShouldFixFork = true;
 		litehook_hook_function(csops, csops_hook);
 		litehook_hook_function(csops_audittoken, csops_audittoken_hook);
 		if (__builtin_available(iOS 16.0, *)) {
@@ -689,7 +690,7 @@ __attribute__((constructor)) static void initializer(void)
 		if (shouldEnableTweaks()) {
 			const char *tweakLoaderPath = JBRootPath("/usr/lib/TweakLoader.dylib");
 			if(access(tweakLoaderPath, F_OK) == 0) {
-				gTweaksEnabled = true;
+				gShouldFixFork = true;
 				void *tweakLoaderHandle = dlopen_hook(tweakLoaderPath, RTLD_NOW);
 				if (tweakLoaderHandle != NULL) {
 					dlclose(tweakLoaderHandle);
@@ -739,6 +740,7 @@ void loadPathFix(void)
 {
 	static dispatch_once_t onceToken;
 	dispatch_once (&onceToken, ^{
+		gShouldFixFork = true;
 		litehook_hook_function((void *)&issetugid, (void *)&new_issetugidhook);
 	});
 }
