@@ -18,8 +18,6 @@ after-package::
 
 before-package::
 	rm -rf ./packages/*
-	mkdir -p $(THEOS_STAGING_DIR)/var
-	ln -s / $(THEOS_STAGING_DIR)/var/jb
 
 clean::
 	rm -rf ./packages/*
