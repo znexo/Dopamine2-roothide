@@ -716,6 +716,8 @@ int getCFMajorVersion(void)
         NSString* systemhookFilePath = [NSString stringWithFormat:@"%@/systemhook-%016llX.dylib", NSJBRootPath(@"/basebin"), jbrand()];
         [[NSFileManager defaultManager] copyItemAtPath:NSJBRootPath(@"/basebin/systemhook.dylib") toPath:systemhookFilePath error:nil];
         
+        JBFixMobilePermissions();
+        
         completion(nil);
     }
 }
