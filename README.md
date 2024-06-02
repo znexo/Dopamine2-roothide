@@ -20,16 +20,17 @@ fork this repo then goto tab [Actions] -> [All Workflows] -> [build tip file] ->
 - step 2: Goto the github Actions tab of your forked project and run workflow to build tip file
 
 ![text](/.pictures/m3.png)
+![text](/.pictures/m4.png)
 
 
 - step 3: Refresh the page and you will see the progress of the build, wait a few minutes
 
-![text](/.pictures/m4.png)
+![text](/.pictures/m5.png)
 
 
 - step 4: when the build is complete, go to the bottom of the build page to download the tipa file
 
-![text](/.pictures/m5.png)
+![text](/.pictures/m6.png)
 
 
 
