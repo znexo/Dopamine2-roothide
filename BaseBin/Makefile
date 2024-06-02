@@ -64,7 +64,7 @@ rootlesshooks: .build .include libjailbreak
 	$(MAKE) -C rootlesshooks
 	@cp rootlesshooks/.theos/obj/rootlesshooks.dylib .build
 
-libroot: 
+libroot: .build .include libjailbreak
 	@$(MAKE) -C ../Packages/libroot all
 	@cp ../Packages/libroot/libroot.dylib .build
 
