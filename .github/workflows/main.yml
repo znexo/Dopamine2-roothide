@@ -1,6 +1,8 @@
-name: "*** build Dopamine2-roothide.tipa ***"
+name: "*** build tipa file ***"
 
 on:
+  schedule:
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -65,13 +67,13 @@ jobs:
           export THEOS="${BASEDIR}/theos"
           gmake -j$(sysctl -n hw.physicalcpu) NIGHTLY=1
           TAG=$(git describe --tags --abbrev=0)
-          mv ./Application/Dopamine.tipa  "./Application/roothide-Dopamine2-${TAG}.tipa"
+          mv ./Application/Dopamine.tipa  "./Application/roothide-Dopamine2-v${TAG}.tipa"
           echo "tag=${TAG}" >> $GITHUB_ENV
 
       - name: Upload Artifact
         id: dopamine-latest-upload
         uses: actions/upload-artifact@v3
         with:
-          name: roothide-Dopamine2-${{ env.tag }}.tipa
+          name: roothide-Dopamine2-v${{ env.tag }}.tipa
           path: |
-            ${{ github.workspace }}/Application/roothide-Dopamine2-${{ env.tag }}.tipa
+            ${{ github.workspace }}/Application/roothide-Dopamine2-v${{ env.tag }}.tipa
