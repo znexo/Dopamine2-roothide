@@ -33,5 +33,9 @@ fork this repo then goto tab [Actions] -> [All Workflows] -> [build tip file] ->
 ![text](/.pictures/m6.png)
 
 
+***and your github name will automatically be listed as a contributor on Credits***
 
-ref to build script [.github/workflows/main.yml](.github/workflows/main.yml) if you want to build on macOS.
+![text](/.pictures/m7.png)
+
+
+*ref to build script [.github/workflows/main.yml](.github/workflows/main.yml) if you want to build on macOS.*
