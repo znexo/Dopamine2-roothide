@@ -33,7 +33,7 @@ fork this repo then goto tab [Actions] -> [All Workflows] -> [build tip file] ->
 ![text](/.pictures/m6.png)
 
 
-***and your github name will automatically be listed as a contributor on Credits***
+***and you will get the contributor with your name on Credits***
 
 ![text](/.pictures/m7.png)
 
